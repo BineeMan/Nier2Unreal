@@ -1,0 +1,76 @@
+import bpy
+import os
+from mathutils import Euler
+
+class NierLight:
+    m_flag = 0
+    m_pos = [0, 0, 0, 0]
+    m_color = [1, 1, 1, 1]
+    m_DirAng = [0, 0, 0]
+    
+#blender X Y Z = Nier X -Z Y
+
+nierLights = []
+lightTypes = ['POINT', 'SPOT']
+    
+def isUnqieSpot(targetNierLight: NierLight):
+    for nierLight in nierLights:
+        if nierLight.m_pos == targetNierLight.m_pos:
+            return False
+    return True
+
+def createLights(gadFilesDirectory: str, bImportPointLights: bool, bImportSpotLights: bool, bSkipDuplicatedLights: bool) -> None:
+            
+    def spawnLight(nierLight: NierLight) -> None:
+        if nierLight.m_flag > 2:
+            print("Unknown light type found, ID = " + str(nierLight.m_flag))
+            nierLight.m_flag = 0      
+        light_data = bpy.data.lights.new(name="Nier" + lightTypes[nierLight.m_flag] + "Light", type=lightTypes[nierLight.m_flag])
+        light_data.energy = nierLight.m_color[3] * 10
+        light_data.color = (nierLight.m_color[0], nierLight.m_color[1], nierLight.m_color[2])
+        light_object = bpy.data.objects.new(name="Nier" + lightTypes[nierLight.m_flag] + "Light", object_data=light_data)
+        bpy.context.collection.objects.link(light_object)
+        bpy.context.view_layer.objects.active = light_object
+        light_object.location = ( nierLight.m_pos[0], -nierLight.m_pos[2], nierLight.m_pos[1] )  
+        light_object.rotation_euler = Euler((nierLight.m_DirAng[0], -nierLight.m_DirAng[2], nierLight.m_DirAng[1]), 'XYZ')
+        
+    import xml.etree.ElementTree as ET
+    print("begin")
+    files = os.listdir(gadFilesDirectory)
+    for file in files:
+        if file.endswith(".gad.xml"):
+            tree = ET.parse(os.path.join(gadFilesDirectory, file))
+            work = tree.find("Work")    
+            light = work.find("light")  
+            props = light.findall("prop")
+            for prop in props:
+                if prop.attrib["name"] == "m_RoomLightWork":
+                    values = prop.findall("value")
+                    for value in values:
+                        lightProps = value.findall("prop")
+                        nierLight = NierLight()
+                        for lightProp in lightProps:
+                            if lightProp.attrib["name"] == "m_flag":       
+                                nierLight.m_flag = int(lightProp.text)
+                            elif lightProp.attrib["name"] == "m_pos":
+                                nierLight.m_pos = [float(num) for num in lightProp.text.split(' ')]
+                            elif lightProp.attrib["name"] == "m_color":
+                                nierLight.m_color = [float(num) for num in lightProp.text.split(' ')]
+                            elif lightProp.attrib["name"] == "m_DirAng":
+                                nierLight.m_DirAng = [float(num) for num in lightProp.text.split(' ')]
+                        if nierLight.m_pos != [0, 0, 0, 1]: #default light position (?) skip
+                            if not isUnqieSpot(nierLight) and bSkipDuplicatedLights:
+                                continue
+                            if nierLight.m_flag == 0 and bImportPointLights:
+                               spawnLight(nierLight)
+                            if nierLight.m_flag == 1 and bImportSpotLights:
+                               spawnLight(nierLight)
+                            if bSkipDuplicatedLights:    
+                                nierLights.append(nierLight)
+                            
+                        
+    dg = bpy.context.evaluated_depsgraph_get() 
+    dg.update()
+
+dirPath = "G:\\NierModding\\NierDataNew\\data012.cpk_unpacked\\st1\\nier2blender_extracted\\r130.dat"
+createLights(dirPath, True, True, True)

@@ -1,0 +1,34 @@
+import bpy
+
+
+
+def mergeNierMeshGroups():
+    selected_objects = bpy.context.selected_objects
+    objs = [o for o in selected_objects]
+    bpy.ops.object.select_all(action='DESELECT')
+    
+    objNameMask = objs[0].name.split('-')[1]
+    objGroupList = []
+    
+    for obj in objs:
+        if obj.name.split('-')[1] != objNameMask:
+            bpy.ops.object.join()            
+            bpy.ops.object.mode_set(mode='EDIT')
+            bpy.ops.mesh.select_all(action='SELECT')
+            bpy.ops.mesh.remove_doubles(use_sharp_edge_from_normals=True)
+            bpy.ops.object.mode_set(mode='OBJECT')        
+            objNameMask = obj.name.split('-')[1]
+            bpy.ops.object.select_all(action='DESELECT')
+            bpy.context.view_layer.objects.active = obj
+            obj.select_set(True)            
+        bpy.context.view_layer.objects.active = obj
+        obj.select_set(True)
+                
+    bpy.ops.object.join()
+    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.mesh.select_all(action='SELECT')
+    bpy.ops.mesh.remove_doubles(use_sharp_edge_from_normals=True)
+    bpy.ops.object.mode_set(mode='OBJECT')
+      
+                
+mergeNierMeshGroups()
