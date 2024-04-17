@@ -16,8 +16,7 @@ UnrealTexturesDirectory = '/Game/NieRAutomata/Maps/Textures/'
 
 NierTextureDirectoryJpg = "G:\\NierModding\\tex_jpg_mergedAll" #dds import not supported by unreal, only jpg or png
 NierTextureDirectoryPng = "G:\\NierModding\\tex_png_mergedAll" #dds import not supported by unreal, only jpg or png
-MaterialsJsonPaths = ["G:\\NierModding\\NierDataNew\\data006.cpk_unpacked\\em\\materials.json",
-    "G:\\Repositories\\Nier2Unreal\\materials.json",
+MaterialsJsonPaths = ["G:\\Repositories\\Nier2Unreal\\materials.json",
                       "G:\\NierModding\\NierDataMerged\\MergedWd1_003-004\\materials.json",
                       "G:\\NierModding\\NierDataMerged\\MergedWd1_013-014\\materials.json",
                         ]
@@ -152,7 +151,7 @@ def getUniqueMats():
     print(len(mats))
     print(mats)
 
-def syncNierMaterials(pngOnly: bool, bSaveMaterialsToCurrentFolder: bool = False) -> None:
+def syncNierMaterials(pngOnly: bool) -> None:
     selectedAssets = unreal.EditorUtilityLibrary.get_selected_assets()
     postfix = "_Inst"
     #with open(MaterialsJsonPaths, 'r') as file:
@@ -167,7 +166,7 @@ def syncNierMaterials(pngOnly: bool, bSaveMaterialsToCurrentFolder: bool = False
 
     if not unreal.EditorAssetLibrary.does_directory_exist(texturesFolder):
         unreal.EditorAssetLibrary.make_directory(texturesFolder)        
-    
+
     for selectedAsset in selectedAssets:
         if selectedAsset.get_class().get_name() != "StaticMesh":
             continue
@@ -378,7 +377,6 @@ def removeLods() -> None:
     for asset in selectedAssets:
         if asset.get_class().get_name() == "StaticMesh":
             unreal.EditorStaticMeshLibrary.remove_lods(asset)
-            unreal.EditorStaticMeshLibrary.lod
 
 class NierLight:
     m_flag = 0
@@ -506,7 +504,6 @@ def exp():
 
 UnrealMapAssetsFolder = "/Game/NieRAutomata/Maps/MapAssets"
 UnrealMapLayFolder = "/Game/NieRAutomata/Maps/LayAssets"
-UnrealMapColFolder = "/Game/NieRAutomata/Maps/CollisionAssets"
 
 def importNierClusters(baseDirPath: str, fileNamesToImport: list, levelToLoad: str) -> None:
     #we receive file path to folder with meshes and lay assets files
@@ -590,125 +587,6 @@ def importNierClusters(baseDirPath: str, fileNamesToImport: list, levelToLoad: s
         fixNierMapPosition()
 
 
-def getImportOptions() -> unreal.FbxImportUI:
-    options = unreal.FbxImportUI()
-    # unreal.FbxImportUI
-    options.set_editor_property('import_mesh', True)
-    options.set_editor_property('import_textures', False)
-    options.set_editor_property('import_materials', False)
-    options.set_editor_property('import_as_skeletal', False)  # Static Mesh
-    # unreal.FbxMeshImportData
-    options.static_mesh_import_data.set_editor_property('import_translation', unreal.Vector(0.0, 0.0, 0.0))
-    options.static_mesh_import_data.set_editor_property('import_rotation', unreal.Rotator(0.0, 0.0, 0.0))
-    options.static_mesh_import_data.set_editor_property('import_uniform_scale', 1.0)
-    # unreal.FbxStaticMeshImportData
-    options.static_mesh_import_data.set_editor_property('combine_meshes', True)
-    options.static_mesh_import_data.set_editor_property('generate_lightmap_u_vs', False)
-    options.static_mesh_import_data.set_editor_property('auto_generate_collision', False)
-    return options
-
-
-def getImportTask(importOptions: unreal.FbxImportUI, destinationPath: str, sourceFileName: str) -> unreal.AssetImportTask:
-    task = unreal.AssetImportTask()
-    task.set_editor_property('automated', True)
-    task.set_editor_property('destination_name', '')
-    task.set_editor_property('destination_path', destinationPath)
-    task.set_editor_property('filename', sourceFileName)
-    task.set_editor_property('replace_existing', True)
-    task.set_editor_property('save', True)
-    task.set_editor_property('options', importOptions)
-    return task
-
-
-#def getAssetsInDirectory(directoryPath: str) -> list:
-    
-
-def executeImportTasks(tasks=[]):
-    unreal.AssetToolsHelpers.get_asset_tools().import_asset_tasks(tasks)
-    imported_asset_paths = []
-    for task in tasks:
-        for path in task.get_editor_property('imported_object_paths'):
-            imported_asset_paths.append(path)
-    return imported_asset_paths
-
-
-def findActor(actorName: str) -> unreal.Actor:
-    for actor in unreal.EditorLevelLibrary.get_all_level_actors():
-        if actor.get_actor_label() == actorName:
-            return actor
-    return None
-
-
-def findClusterActor(actorName: str) -> unreal.Actor:
-    for actor in unreal.EditorLevelLibrary.get_all_level_actors():
-        if actor.get_actor_label().startswith(actorName):
-            return actor
-    return None
-
-
-def importClusterCollisions(baseDirPath: str, fileNamesToImport: list) -> None:
-    parentActor = None
-    try:
-        for fileName in fileNamesToImport:
-            colExtensions = ["-Col_S", "-Col_B"]
-            colBaseSourcePath = os.path.join(baseDirPath, fileName, "Collision")
-            colFiles = [os.path.join(colBaseSourcePath, fileName + colExtension + ".fbx") for colExtension in colExtensions]
-
-            for colFile in colFiles:
-                if not os.path.exists(colFile):
-                    print("Path does not exist, skipping " + colFile)
-                    continue
-                #assetName = os.path.basename(colFile)[:-10]
-                parentActor = findClusterActor(fileName)
-
-                if parentActor is None:
-                    print("Parent actor is None, skipping " + colFile)
-                    continue
-                
-                destinationAssetPath = unreal.Paths.combine([UnrealMapColFolder, fileName + "_Col"])
-                if not EditorAssetLibrary.does_directory_exist(destinationAssetPath):
-                    EditorAssetLibrary.make_directory(destinationAssetPath)
-
-                importTask = getImportTask(getImportOptions(), destinationAssetPath, colFile)
-                importedCollisions = executeImportTasks([importTask])
-                if len(importedCollisions) == 0:
-                    print("No collisions were imported, skipping " + colFile)
-                    continue
-                parentActor.set_actor_location(unreal.Vector(0, 0, 0), False, False)
-                #importedCollisionWrappers = importCollisionWrapper(destinationAssetPath, len(importedCollisions))
-                
-
-                for i in range(len(importedCollisions)):
-                    colBaseName = os.path.basename(importedCollisions[i])
-                    colBaseName = colBaseName[0:colBaseName.index('.')]
-                    print(colBaseName)
-
-                    colWrapper = importCollisionWrapper(destinationAssetPath, "ColWrapper_" + colBaseName)[0]
-
-                    colWrapperAsset = EditorAssetLibrary.find_asset_data(colWrapper).get_asset()
-                    colStaticMesh = EditorAssetLibrary.find_asset_data(importedCollisions[i]).get_asset()
-
-                    colWrapperAsset.set_editor_property('complex_collision_mesh', colStaticMesh)
-                    
-                    #spawn col actor
-                    if "after" not in colBaseName:
-                        colWrapperActor = unreal.EditorLevelLibrary.spawn_actor_from_object(colWrapperAsset, unreal.Vector(0, 0, 0), [ 0, 0, 0 ])
-                        #colWrapperActor.set_actor_label("ColWrapper_" + colBaseName)
-                        colWrapperActor.attach_to_actor(parentActor,
-                                    "NAME_None",
-                                        unreal.AttachmentRule.KEEP_WORLD,
-                                        unreal.AttachmentRule.KEEP_WORLD,
-                                        unreal.AttachmentRule.KEEP_WORLD,
-                                        False)
-                unreal.EditorLevelLibrary.set_selected_level_actors([parentActor])
-                fixNierMapPosition()
-    except:
-        if parentActor is not None:
-            unreal.EditorLevelLibrary.set_selected_level_actors([parentActor])
-            fixNierMapPosition()
-
-
-        
 def getClusterNames(filePath: str) -> list:
     fileNames = []
     with open(filePath, 'r') as file:
@@ -716,82 +594,20 @@ def getClusterNames(filePath: str) -> list:
             fileNames.append(line.replace(' ', '').replace('\n', ''))
     return fileNames
 
-
-def importCollisionWrapper(destinationPath: str, collisionFileName: str) -> list:
-    if not unreal.EditorAssetLibrary.does_directory_exist(destinationPath):
-        unreal.EditorAssetLibrary.make_directory(destinationPath)
-
-    filePath = "E:\\3Dprogramms\\NierModding\\NierOverworld\\CollisionWrapper.fbx"
-    newFilePath = filePath.replace("CollisionWrapper", collisionFileName)
-    os.rename(filePath, newFilePath)
-    importedPath = executeImportTasks([getImportTask(getImportOptions(), destinationPath, newFilePath)])
-    
-    os.rename(newFilePath, filePath)
-
-    return importedPath
-
-
-def fixNames():
-    allActors = unreal.EditorLevelLibrary.get_all_level_actors()
-    actorsToSelect = []
-    actorSub = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
-    for actor in allActors:
-        actorLabel = actor.get_actor_label()
-        if actorLabel.startswith("g") and len(actorLabel) == 6:
-            attachedActors = actor.get_attached_actors()
-            if len(attachedActors) > 0:
-                for attachedActor in attachedActors:
-                    attachedActorLabel = attachedActor.get_actor_label()
-                    if attachedActorLabel.startswith("FbxScene_"):
-                        newName = attachedActorLabel[9:15]
-                        actor.set_actor_label(newName)
-                        print(actorLabel, newName)
-                        break
-
-
-def selectActors(actorsToSelect):
-    allActors = unreal.EditorLevelLibrary.get_all_level_actors()
-    selectedActors = []
-    
-    for name in actorsToSelect:
-        for actor in allActors:
-            if actor.get_actor_label() == name:
-                selectedActors.append(actor)
-                break
-
-    unreal.EditorLevelLibrary.set_selected_level_actors(selectedActors)
-    actorSub = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
-    unreal.EditorActorSubsystem.select_all_children(actorSub, False)
-
-#fixNames()
-
-#print(os.path.basename(os.path.normpath('/folderA/folderB/folderC/folderD/')))
-
-filePath = "G:\\Repositories\\Nier2Unreal\\clustersCityRuinsMain.txt"
+#filePath = "G:\\Repositories\\Nier2Unreal\\clustersCityRuinsMain.txt"
 
 #filePath = "G:\\Repositories\\Nier2Unreal\\ClustersCityRuinsOnlyA.txt"
 
 #filePath = "G:\\Repositories\\Nier2Unreal\\ClustersCityRuinsOnlyB.txt"
 
-#clusterNames = getClusterNames(filePath)
-#clusterNames = ["g11229", "g11418", "g11419", "g11420"]
-clusterNames = ["g11419"]
+#clusterNames = getClusterNames(filePath)            
+#clusterNames = ['g11021']
 
-#selectActors(clusterNames)
-
-#clusterNames = ["g11221", "g11418", "g11419", "g11420"]
-#clusterNames = ["g11221"]
-
-gFilesPath = os.path.join("E:\\3Dprogramms\\NierModding\\NierOverworld\\auto")
+#gFilesPath = os.path.join("E:\\3Dprogramms\\NierModding\\NierOverworld\\auto")
 #levelName = "NierOverworld"
 #levelName = "NierOverworldBeforePart"
 #levelName = "NierOverworldAfterPart"
 #importNierClusters(gFilesPath, clusterNames, levelName)
-
-importClusterCollisions(gFilesPath, clusterNames)
-#fixNierMapPosition()
-
-#importCollisionWrapper("/Game/NieRAutomata/Maps/CollisionAssets/test/", "testCol2")
 
 #dirPath = "G:\\NierModding\\NierDataNew\\data012.cpk_unpacked\\st1\\nier2blender_extracted\\r130.dat"
 #createLights(dirPath, True, True, True)
@@ -810,4 +626,4 @@ importClusterCollisions(gFilesPath, clusterNames)
 #removeSimpleCollision()
 
 #fixNierMapPosition()
-#syncNierMaterials(pngOnly=True)
+syncNierMaterials(pngOnly=True)

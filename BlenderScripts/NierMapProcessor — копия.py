@@ -1,6 +1,7 @@
 import bpy
 import os
 import re
+from datetime import datetime
 
 def generateNewNierUVLightmaps(bRewriteLightmaps: bool) -> None:  
     selected_objects = bpy.context.selected_objects
@@ -118,6 +119,10 @@ def doesCollectionExists(colName: str) -> bool:
     return colName in bpy.data.collections
 
 
+def printToLog(text: str) -> None:
+    with open(logFilePath, 'a') as file:
+        file.write(text + "\n")
+
 def processCollision(assetName: str, outputSavePath: str):
     def objToKey(obj):
         return str({
@@ -130,12 +135,9 @@ def processCollision(assetName: str, outputSavePath: str):
     groupedObjects = {}
     
     path = os.path.join(outputSavePath, assetName +"-Col" + ".fbx")
-    if bSkipExistingCollisionFiles and os.path.exists(path):
-        print("Existing collision found, skipping " + assetName)
-        return
     
     if not doesCollectionExists("COL"):
-        print("Collision not found, skipping " + assetName)
+        printToLog("Collision not found, skipping " + assetName)
         return
     
     for obj in bpy.data.collections["COL"].objects:
@@ -158,13 +160,45 @@ def processCollision(assetName: str, outputSavePath: str):
         bpy.ops.object.join()
     
     collection = bpy.data.collections["COL"]
+    
+    savePath = os.path.join(outputSavePath, "Collision")
+    
+    if not os.path.exists(savePath):
+        os.mkdir(savePath)
+    
+    #standalone col objects
     bpy.ops.object.select_all(action='DESELECT')
-    for obj in [o for o in collection.objects if o.type == 'MESH']:
+    bFoundAny = False
+    for obj in [o for o in collection.objects if o.type == 'MESH' and ("before" not in o.name.lower()) and ("after" not in o.name.lower())]:
         bpy.context.view_layer.objects.active = obj
         obj.select_set(True)
+        bFoundAny = True       
+    if bFoundAny:
+        bpy.ops.export_scene.fbx(filepath = os.path.join(savePath, assetName +"-Col_S" + ".fbx"), use_selection=True)
+    
+    #before col objects
+    bFoundAny = False
+    bpy.ops.object.select_all(action='DESELECT')
+    for obj in [o for o in collection.objects if o.type == 'MESH' and ("before" in o.name.lower())]:
+        bpy.context.view_layer.objects.active = obj
+        obj.select_set(True)     
+        bFoundAny = True
         
-    bpy.ops.export_scene.fbx(filepath = os.path.join(outputSavePath, assetName +"-Col" + ".fbx"), use_selection=True)
-
+    if bFoundAny:       
+        bpy.ops.export_scene.fbx(filepath = os.path.join(savePath, assetName +"-Col_B" + ".fbx"), use_selection=True)
+    
+    #after col objects
+    bFoundAny = False
+    bpy.ops.object.select_all(action='DESELECT')
+    for obj in [o for o in collection.objects if o.type == 'MESH' and ("after" in o.name.lower())]:
+        bpy.context.view_layer.objects.active = obj
+        obj.select_set(True)  
+        bFoundAny = True
+    if bFoundAny:          
+        bpy.ops.export_scene.fbx(filepath = os.path.join(savePath, assetName +"-Col_A" + ".fbx"), use_selection=True)
+    
+    
+    
 def processLay(assetName: str, outputSavePath: str):
     collection = bpy.data.collections["lay_layAssets"]
     bpy.ops.object.select_all(action='DESELECT')
@@ -179,37 +213,41 @@ def processLay(assetName: str, outputSavePath: str):
     bpy.ops.export_scene.fbx(filepath = os.path.join(outputSavePath, assetName +"-Lay" + ".fbx"), use_selection=True)
         
            
-def processAsset(assetPath: str):
+def processAsset(assetPath: str, bSkipExisting: bool):
     assetName = os.path.basename(assetPath).replace(".dtt", "") 
     outputSavePath = os.path.join(fbxSavePath, assetName)
     
-    if bSkipExisting and os.path.exists(outputSavePath):
-        print("Existing file foud, skipping " + assetPath)
-        return
+    #import dtt
     
+
     if not os.path.exists(outputSavePath):
         os.mkdir(outputSavePath)
     
     for collection in bpy.data.collections:
         bpy.data.collections.remove(collection, do_unlink=True)
+
+    bpy.ops.import_scene.dtt_data(filepath = assetPath, reset_blend = True)
     
-    path = os.path.join(outputSavePath, assetName +"-Col" + ".fbx")
-    #print(path)    
-        
-    if not os.path.exists(path+"-Lay" + ".fbx"):
-   
-        bpy.ops.import_scene.dtt_data(filepath = assetPath, reset_blend = True)
-        processCollision(assetName, outputSavePath)
-        
-    
-    #processMeshes(assetName, outputSavePath)
-        
+    #processMeshes(assetName, outputSavePath)  
+    processCollision(assetName, outputSavePath)  
     #try:
     #    processLay(assetName, outputSavePath)
     #except:
-    #    print(assetName + " Lay Error")   
+    #    printToLog(assetName + " Lay Error")
+        
+        
+def convertToBlend(assetPath: str, outputFolder: str) -> None:
+    assetName = os.path.basename(assetPath).replace(".dtt", "")
     
+    if os.path.exists(os.path.join(outputFolder, assetName + ".blend")):
+        return
     
+    for collection in bpy.data.collections:
+        bpy.data.collections.remove(collection, do_unlink=True)
+        
+    bpy.ops.import_scene.dtt_data(filepath = assetPath, reset_blend = True)
+    bpy.ops.wm.save_as_mainfile(filepath=os.path.join(outputFolder, assetName + ".blend"))
+
 
 print("---------------------------------")
 
@@ -217,7 +255,7 @@ targetFiles = []
 assetDir = "G:\\NierModding\\NierDataMerged\\MergedWd1_003-004,013-014"
 fbxSavePath = "E:\\3Dprogramms\\NierModding\\NierOverworld\\auto"
 
-
+blendDir = "E:\\3Dprogramms\\NierModding\\NierOverworld\\blend"
 
 clustersFile = 'E:\\3Dprogramms\\NierModding\\clusters.txt'
 with open(clustersFile) as file:
@@ -225,17 +263,24 @@ with open(clustersFile) as file:
    
 print(targetFiles)
 
+#targetFiles = ['g11320']
 
-
-bSkipExisting = False
+bSkipExistingWmb = True
 bSkipExistingCollisionFiles = True
+bSkipExistingLayFiles = True
+
+# datetime object containing current date and time
+now = datetime.now()
+# dd/mm/YY H:M:S
+dateTimeNow = now.strftime("%d.%m.%Y %H.%M")
+logFilePath = os.path.join("E:\\3Dprogramms\\NierModding\\NierOverworld\\logs", dateTimeNow + ".txt")
+
 
 for file in targetFiles:
     path = os.path.join(assetDir, file + ".dtt")
     if os.path.exists(path): 
-        processAsset(path)
+        processAsset(assetPath=path, bSkipExisting=True)
+
     else:
-        print("Error: file " + path + " does not exist.")
+        printToLog("Error: file " + path + " does not exist.")
                         
-#mergeNierMeshGroups(False)
-#generateNewNierUVLightmaps(True)
